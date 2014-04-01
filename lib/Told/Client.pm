@@ -6,6 +6,7 @@ use warnings;
 
 use JSON;
 use LWP;
+use Devel::StackTrace;
 
 require Exporter;
 
@@ -27,7 +28,7 @@ our @EXPORT = qw(
     getParams
 );
 
-our $VERSION = '0.01';
+our $VERSION = '0.03';
 
 sub new {
     my $package = shift;
@@ -117,8 +118,10 @@ sub setDefaulttags {
 sub tell {
     my $self = shift;
     my ($_message, $_type, @_tags) = @_;
-    
-    my $browser = LWP::UserAgent->new;
+
+    my $browser = LWP::UserAgent->new(
+    	agent	=> 	'opentabsPOS/'. $VERSION
+    );
     if(!$self->{'host'} || length($self->{'host'}) == 0){
         warn "No host ist set\n" if $self->{'verbose'};
         return 0;
@@ -127,7 +130,8 @@ sub tell {
     
     my @tags = ();
     my $cnt_fn_tags = @_tags;
-    my $cnt_known_tags = @{$self->{'tags'}} if($self->{'tags'});
+    my $cnt_known_tags = 0;
+    $cnt_known_tags = @{$self->{'tags'}} if($self->{'tags'});
     @tags = @{$self->{'defaulttags'}} if($self->{'defaulttags'} && ($cnt_fn_tags <= 0 && $cnt_known_tags <= 0));
     
     foreach my $t(@{$self->{'tags'}} ){
@@ -139,9 +143,9 @@ sub tell {
     	}
     
     }
-    
 	my $type = $_type || $self->{'type'} || "";
  	my $message;
+
 	if (ref($_message) eq "HASH") {
 		
         if($_message->{type}){
@@ -164,6 +168,8 @@ sub tell {
         		$self->{'connectiontype'} = 'POST';
         	}
         }
+    } else {
+		$message = $_message;
     }
     
     my $result;
@@ -191,11 +197,15 @@ sub tell {
     	$data{'tags'} = \@tags;
     	$data{'message'} = $message;
     	
+    	my $trace = Devel::StackTrace->new;
+    	$data{'stacktrace'} = $trace->as_string;
+    	
     	if($self->{'host'} =~ /^test/){
             $result = encode_json(\%data);
     	} else {
         	$result = $browser->post($self->{'host'}."/log"
-           		, encode_json \%data
+        		, Content_Type => 'application/json'
+           		, Content => encode_json \%data
 	        );
 	    }
     } elsif($self->{'connectiontype'} eq 'UDP'){
